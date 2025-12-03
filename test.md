@@ -1,38 +1,70 @@
-graph TD
-    %% Определение стилей
-    classDef system fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
+```mermaid
+flowchart TD
+    %% --- Стили ---
+    classDef action fill:#e3f2fd,stroke:#1565c0,stroke-width:2px;
     classDef human fill:#fff9c4,stroke:#fbc02d,stroke-width:2px;
-    classDef startend fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,rx:10,ry:10;
+    classDef event fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,rx:5,ry:5;
+    classDef gateway fill:#fff,stroke:#333,stroke-width:2px,rx:5,ry:5;
 
-    %% Начало
-    Start((Начало процесса)):::startend --> Step1[Выгрузка номенклатуры из док. Импорта<br/>(без тех. описаний)]:::system
+    %% --- Основной процесс ---
+    Start([Начало: Обновление тех. описаний]):::event
     
-    %% Основной поток
-    Step1 --> Step2[Генерация технических описаний]:::system
-    Step2 --> Step3[Запись описаний в базу УПП]:::system
+    subgraph DataPrep [Подготовка данных]
+        Step1[Выгрузка номенклатур из документов импорта<br/><i>(где нет описания)</i>]:::action
+        Step2[Генерация технических описаний]:::action
+        Step3[Перенос описаний в базу УПП]:::action
+    end
+
+    Fork{Разделение<br/>потоков}:::gateway
+
+    %% --- Связи основного процесса ---
+    Start --> Step1
+    Step1 --> Step2
+    Step2 --> Step3
+    Step3 --> Fork
+
+    %% --- Ветка 1: Методология и Обучение ---
+    subgraph Branch1 [Ветка 1: Методология и Обучение]
+        direction TB
+        B1_Step1[Получение регламента от отдела BRP]:::human
+        B1_Step2[Адаптация регламента под другие отделы]:::human
+        B1_Step3[Установка блокировки в УПП:<br/>Запрет 'Заказа поставщику'<br/>без тех. описания]:::action
+        B1_Step4[Обучение менеджеров<br/>новому регламенту]:::human
+    end
+
+    %% --- Ветка 2: Web и Интеграция ---
+    subgraph Branch2 [Ветка 2: Работа с сайтом]
+        direction TB
+        B2_Step1[Парсинг каталогов<br/><i>(HTML описания)</i>]:::action
+        
+        subgraph Exchanges [Настройка обменов]
+            B2_Step2[Настройка: УПП -> УТ -> Сайт]:::action
+            B2_Step3[Настройка: УПП -> Сайт 2]:::action
+        end
+        
+        NoteDisplay[/Важно: Корректное отображение описания<br/>+ Скрытое тех. описание для ботов/]
+    end
+
+    %% --- Связи веток ---
+    Fork --> B1_Step1
+    B1_Step1 --> B1_Step2
+    B1_Step2 --> B1_Step3
+    B1_Step3 --> B1_Step4
+
+    Fork --> B2_Step1
+    B2_Step1 --> B2_Step2
+    B2_Step1 --> B2_Step3
     
-    %% Разделение потоков
-    Step3 --> Fork{Параллельный<br/>шлюз}
-    
-    %% Ветка 1: Обучение и Регламенты
-    Fork --> Branch1_1[Запрос регламента у отдела BRP]:::human
-    Branch1_1 --> Branch1_2[Адаптация регламента под другие отделы]:::human
-    Branch1_2 --> Branch1_3[Установка блокировки в УПП<br/>на проведение 'Заказ поставщику'<br/>без тех. описания]:::system
-    Branch1_3 --> Branch1_4[Обучение менеджеров<br/>новому регламенту]:::human
-    
-    %% Ветка 2: Работа с сайтом
-    Fork --> Branch2_1[Парсинг каталогов<br/>(получение HTML описаний)]:::system
-    Branch2_1 --> Branch2_2[Настройка обмена УПП -> УТ -> Сайт 1]:::system
-    Branch2_1 --> Branch2_3[Настройка обмена УПП -> Сайт 2]:::system
-    
-    %% Детали настройки обмена (комментарии/ассоциации)
-    Branch2_2 -.-> Note1[Требование:<br/>Корректное отображение описания +<br/>Скрытое тех. описание для ботов]
-    Branch2_3 -.-> Note1
-    
-    %% Слияние потоков
-    Branch1_4 --> Join{Слияние}
-    Branch2_2 --> Join
-    Branch2_3 --> Join
-    
-    %% Конец
-    Join --> End((Конец процесса)):::startend
+    %% Привязка заметки
+    B2_Step2 -.- NoteDisplay
+    B2_Step3 -.- NoteDisplay
+
+    %% --- Завершение ---
+    Join{Слияние<br/>результатов}:::gateway
+    End([Конец процесса]):::event
+
+    B1_Step4 --> Join
+    B2_Step2 --> Join
+    B2_Step3 --> Join
+    Join --> End
+```
