@@ -1,69 +1,67 @@
+```mermaid
 graph TD
-    %% Определение дорожек (Swimlanes) через подграфы
-    subgraph "Роль: Оператор / Склад (Действия людей)"
-        StartEvent((Начало: Физический заказ получен))
-        Task_Assembly[Задача: Выполнить операции по сборке]
-    end
-
-    subgraph "Роль: Система (Автоматические действия)"
-        Task_CreateSO[Сервис-задача: Создать 'Заказ покупателя']
-        Task_CreatePL[Сервис-задача: Создать 'Упаковочный лист']
-        Task_UpdatePL_Status[Сервис-задача: Изменить статус 'Упаковочного листа' на 'Собран']
-        Task_UpdateSO_Status[Сервис-задача: Изменить статус 'Заказа покупателя' на 'Ожидает отгрузку']
-        Task_CreateImpl[Сервис-задача: Создать 'Реализацию ТМЗ и услуг']
-        Task_NotifyManager[Отправка сообщения: Уведомить менеджера с вложениями]
-    end
-
-    subgraph "Роль: Менеджер"
-        Event_ReceiveNotify((Получено уведомление и документы))
-        EndEvent((Конец: Заказ готов к отгрузке))
-    end
-
-    %% Определение Объектов Данных (Документов и их статусов)
-    DataObject_SO_Assembly[/"Док: Заказ покупателя<br>[Статус: Сборка]"/]
-    DataObject_PL_Awaiting[/"Док: Упаковочный лист<br>[Статус: Ожидает сборки]"/]
-    DataObject_PL_Assembled[/"Док: Упаковочный лист<br>[Статус: Собран]"/]
-    DataObject_SO_Shipping[/"Док: Заказ покупателя<br>[Статус: Ожидает отгрузку]"/]
-    DataObject_Impl[/"Док: Реализация ТМЗ"/]
-    DataObject_Waybill[/"Док: Товарная накладная"/]
-
-    %% --- Поток управления (Стрелки) ---
-
-    %% 1. Старт и создание первичных документов
-    StartEvent --> Task_CreateSO
-    Task_CreateSO -- Создает --> DataObject_SO_Assembly
-    Task_CreateSO --> Task_CreatePL
-    Task_CreatePL -- Создает на основании ЗП --> DataObject_PL_Awaiting
-
-    %% 2. Передача на склад и сборка
-    Task_CreatePL --> Task_Assembly
-    DataObject_PL_Awaiting -. Входные данные .-> Task_Assembly
-
-    %% 3. Завершение сборки и автоматическая цепочка обновлений
-    Task_Assembly -- Фиксация завершения сборки --> Task_UpdatePL_Status
-    Task_UpdatePL_Status -- Обновляет статус --> DataObject_PL_Assembled
+    %% --- Определение дорожек (Swimlanes) ---
     
-    Task_UpdatePL_Status --> Task_UpdateSO_Status
-    Task_UpdateSO_Status -- Обновляет статус --> DataObject_SO_Shipping
+    subgraph Warehouse [Склад / Оператор]
+        direction TB
+        Start((Начало:<br>Поступление<br>заказа))
+        Task_Assembly[Ручная операция:<br>Сборка заказа]
+    end
 
-    %% 4. Создание финальных документов
-    Task_UpdateSO_Status --> Task_CreateImpl
-    Task_CreateImpl -- Создает --> DataObject_Impl
-    Task_CreateImpl -- Создает --> DataObject_Waybill
+    subgraph System [Система ERP / WMS]
+        direction TB
+        Create_SO[Создать док:<br>Заказ покупателя<br><b>Статус: Сборка</b>]
+        Create_PL[Создать док:<br>Упаковочный лист<br><b>Статус: Ожидает сборки</b>]
+        
+        Update_PL_Status[Изменить статус УЛ<br>на <b>Собран</b>]
+        Update_SO_Status[Изменить статус ЗП<br>на <b>Ожидает отгрузку</b>]
+        
+        Create_Final_Docs[Создать док:<br>Реализация ТМЗ<br>+ Товарная накладная]
+        Notify_Manager[Отправить email/уведомление<br>менеджеру с вложениями]
+    end
 
-    %% 5. Уведомление менеджера
-    Task_CreateImpl --> Task_NotifyManager
-    Task_NotifyManager -- Отправка реализации и накладной --> Event_ReceiveNotify
+    subgraph Manager [Менеджер]
+        direction TB
+        Receive_Notify((Получение<br>уведомления))
+        End((Конец:<br>Груз готов))
+    end
+
+    %% --- Связи (Логика процесса) ---
+
+    %% 1. Инициализация
+    Start --> Create_SO
     
-    %% 6. Завершение
-    Event_ReceiveNotify --> EndEvent
+    %% 2. Подготовка документов
+    Create_SO --> Create_PL
+    
+    %% 3. Передача задачи на склад
+    Create_PL --> Task_Assembly
+    
+    %% 4. Завершение сборки триггерит цепочку в Системе
+    Task_Assembly -- Фиксация выполнения --> Update_PL_Status
+    
+    %% 5. Автоматическая цепочка статусов
+    Update_PL_Status --> Update_SO_Status
+    Update_SO_Status --> Create_Final_Docs
+    
+    %% 6. Уведомление
+    Create_Final_Docs --> Notify_Manager
+    Notify_Manager --> Receive_Notify
+    Receive_Notify --> End
 
-    %% Стилизация для наглядности (Mermaid специфично)
-    style DataObject_SO_Assembly fill:#fff,stroke:#333,stroke-width:2px,stroke-dasharray: 5 5
-    style DataObject_PL_Awaiting fill:#fff,stroke:#333,stroke-width:2px,stroke-dasharray: 5 5
-    style DataObject_PL_Assembled fill:#e6ffe6,stroke:#333,stroke-width:2px
-    style DataObject_SO_Shipping fill:#e6ffe6,stroke:#333,stroke-width:2px
-    style DataObject_Impl fill:#e6ffe6,stroke:#333,stroke-width:2px
-    style DataObject_Waybill fill:#e6ffe6,stroke:#333,stroke-width:2px
-    style subgraph "Роль: Система (Автоматические действия)" fill:#f0f8ff,stroke:#87cefa
-    style subgraph "Роль: Оператор / Склад (Действия людей)" fill:#fff5e6,stroke:#ffa500
+    %% --- Стилизация (делаем похоже на BPMN) ---
+    style Start fill:#9f9,stroke:#333,stroke-width:2px,shape:circle
+    style End fill:#fa8072,stroke:#333,stroke-width:2px,shape:circle,color:black
+    style Receive_Notify fill:#fff,stroke:#333,stroke-width:2px,shape:circle
+    
+    %% Стили задач системы (автоматика - синий оттенок)
+    style Create_SO fill:#e1f5fe,stroke:#0277bd
+    style Create_PL fill:#e1f5fe,stroke:#0277bd
+    style Update_PL_Status fill:#e1f5fe,stroke:#0277bd
+    style Update_SO_Status fill:#e1f5fe,stroke:#0277bd
+    style Create_Final_Docs fill:#e1f5fe,stroke:#0277bd
+    style Notify_Manager fill:#e1f5fe,stroke:#0277bd
+
+    %% Стили задач человека (оранжевый оттенок)
+    style Task_Assembly fill:#ffe0b2,stroke:#ef6c00
+```
